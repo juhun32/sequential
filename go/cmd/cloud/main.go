@@ -27,8 +27,19 @@ func main() {
 	hub := websocket.NewHub(store)
 	go hub.Run()
 
-	// endpoint for local -> hub ingest
+	// health check
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// endpoint for local -> hub ingest where local clients POST telemetry batches to the db queue
 	http.HandleFunc("/ingest", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		var batch []types.SPageFilePhysics
 		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -52,11 +63,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// endpoint for dashboard clients
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	// endpoint for dashboard clients live websocket connection
+	http.HandleFunc("/ws/", func(w http.ResponseWriter, r *http.Request) {
+		// sessionID := strings.TrimPrefix(r.URL.Path, "/ws/")
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Println(err)
+			log.Println("error:", err)
 			return
 		}
 		hub.RegisterClient(conn)

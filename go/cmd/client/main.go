@@ -38,10 +38,24 @@ func main() {
 	batch := make([]types.SPageFilePhysics, 0)
 	ticker := time.NewTicker(100 * time.Millisecond)
 
+	// track the last packet ID to detect stale data
+	// shared memory keeps updating even when the game is paused or closed
+	// we need a way to avoid sending duplicate frames
+	// so we use the PacketId field which increments with each new frame
+	// this way we only send new data
+	var lastPacketId int32 = -1
+
 	for range ticker.C {
 		// direct memory access
 		// significantly faster than binary.Read
 		data := *physicsData
+
+		// if the packet ID hasnt changed, the game is likely paused or closed.
+		// we shouldn't send duplicate frames.
+		if data.PacketId == lastPacketId {
+			continue
+		}
+		lastPacketId = data.PacketId
 
 		batch = append(batch, data)
 
