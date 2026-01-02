@@ -1,5 +1,5 @@
 import { useSocket } from "./hooks/socket";
-import { Tachometer } from "./components/telemetry/telemetry";
+import { Telemetry } from "./components/telemetry/telemetry";
 
 function App() {
     const sessionId = "live_session_1";
@@ -11,7 +11,7 @@ function App() {
                 <h1 className="tracking-tighter">SEQUENTIAL // {sessionId}</h1>
             </header>
 
-            <Tachometer />
+            <Telemetry />
         </div>
     );
 }
