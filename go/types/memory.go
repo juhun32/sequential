@@ -12,3 +12,14 @@ type SPageFilePhysics struct {
 	SpeedKmh   float32
 	// and much more but we only need these for now
 }
+
+type SPageFileGraphics struct {
+	PacketId      int32
+	Status        int32
+	Session       int32
+	CurrentTime   [15]uint16
+	LastTime      [15]uint16
+	BestTime      [15]uint16
+	Split         [15]uint16
+	CompletedLaps int32
+}

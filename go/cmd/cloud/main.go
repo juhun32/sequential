@@ -53,8 +53,13 @@ func main() {
 			sessionID = "default_session"
 		}
 
+		// lap number
+		var lap int32
+		fmt.Sscanf(r.URL.Query().Get("lap"), "%d", &lap)
+
 		payload := types.TelemetryPayload{
 			SessionID: sessionID,
+			Lap:       lap,
 			Data:      batch,
 		}
 

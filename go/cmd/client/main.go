@@ -29,8 +29,20 @@ func main() {
 	ptr, _ := windows.MapViewOfFile(handle, windows.FILE_MAP_READ, 0, 0, 0)
 	defer windows.UnmapViewOfFile(ptr)
 
+	// graphics memory map for lap data
+	handleGraphics, err := openFileMapping(windows.FILE_MAP_READ, false, "Local\\acpmf_graphics")
+	if err != nil {
+		log.Fatal("graphics memory map not found.")
+	}
+	defer windows.CloseHandle(handleGraphics)
+
+	ptrGraphics, _ := windows.MapViewOfFile(handleGraphics, windows.FILE_MAP_READ, 0, 0, 0)
+	defer windows.UnmapViewOfFile(ptrGraphics)
+
 	// direct cast to the struct pointer so we can read fields directly
 	physicsData := (*types.SPageFilePhysics)(unsafe.Pointer(ptr))
+	graphicsData := (*types.SPageFileGraphics)(unsafe.Pointer(ptrGraphics))
+
 	// NOTE: this is the standard pattern for memory mapped files,
 	// even if go vet warns about uintptr conversion.
 	// the memory is managed by the OS, not the Go GC, therefore is "pinned" and it won't move.
@@ -45,10 +57,27 @@ func main() {
 	// this way we only send new data
 	var lastPacketId int32 = -1
 
+	// init current laps to avoid triggering on startup
+	var lastCompletedLaps int32 = graphicsData.CompletedLaps
+
 	for range ticker.C {
 		// direct memory access
 		// significantly faster than binary.Read
 		data := *physicsData
+		gData := *graphicsData
+
+		// check for lap completion
+		if gData.CompletedLaps > lastCompletedLaps {
+			log.Printf("lap completed - lap count: %d", gData.CompletedLaps)
+
+			// send current batch on lap finish; belongs to previous lap
+			if len(batch) > 0 {
+				go sendToCloud(batch, lastCompletedLaps)
+				batch = nil
+			}
+
+			lastCompletedLaps = gData.CompletedLaps
+		}
 
 		// if the packet ID hasnt changed, the game is likely paused or closed.
 		// we shouldn't send duplicate frames.
@@ -63,7 +92,7 @@ func main() {
 			// logging: check the last frame of the batch
 			logPhysics(batch[len(batch)-1])
 
-			go sendToCloud(batch)
+			go sendToCloud(batch, lastCompletedLaps)
 			batch = nil
 		}
 	}
@@ -104,7 +133,7 @@ func logPhysics(d types.SPageFilePhysics) {
 	fmt.Printf("	== Steer Angle: 	%.2f\n\n", d.SteerAngle)
 }
 
-func sendToCloud(data []types.SPageFilePhysics) {
+func sendToCloud(data []types.SPageFilePhysics, lap int32) {
 	// marshal the batch to JSON
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -116,7 +145,7 @@ func sendToCloud(data []types.SPageFilePhysics) {
 	// adding a session_id query param so the server can group these records
 	// might use something from assetto like track name or a hash later
 	// for now using a static value (live_session_1)
-	url := "http://localhost:5000/ingest?session_id=live_session_1"
+	url := fmt.Sprintf("http://localhost:5000/ingest?session_id=live_session_1&lap=%d", lap)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("Error creating request: %v", err)

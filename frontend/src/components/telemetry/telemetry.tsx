@@ -13,7 +13,7 @@ export const Telemetry = () => {
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="Gas"
-                    color="#10b981"
+                    color="rgba(16, 185, 129, 1)"
                     label="Gas"
                     minY={0}
                     maxY={1}
@@ -21,7 +21,7 @@ export const Telemetry = () => {
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="Brake"
-                    color="#ef4444"
+                    color="rgba(239, 68, 68, 1)"
                     label="Brake"
                     minY={0}
                     maxY={1}
@@ -29,19 +29,19 @@ export const Telemetry = () => {
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="Gear"
-                    color="#f59e0b"
+                    color="rgba(245, 158, 11, 1)"
                     label="Gear"
                 />
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="Rpms"
-                    color="#3b82f6"
+                    color="rgba(59, 130, 246, 1)"
                     label="RPM"
                 />
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="SteerAngle"
-                    color="#8b5cf6"
+                    color="rgba(139, 92, 246, 1)"
                     label="Steer Angle"
                     minY={-1}
                     maxY={1}
@@ -49,12 +49,12 @@ export const Telemetry = () => {
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="SpeedKmh"
-                    color="#ec4899"
+                    color="rgba(236, 72, 153, 1)"
                     label="Speed (km/h)"
                 />
             </div>
             <div className="text-xs font-mono">
-                Total Frames Captured: {history.length}
+                Total frames captured: {history.length}
             </div>
             <pre className="text-xs p-4 border rounded overflow-auto max-h-[400px] font-mono">
                 {JSON.stringify(history, null, 2)}

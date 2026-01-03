@@ -55,7 +55,7 @@ func (h *Hub) Run() {
 			// braodcast path: live to dashboards
 			h.mu.RLock()
 			for client := range h.clients {
-				err := client.WriteJSON(payload.Data)
+				err := client.WriteJSON(payload)
 				if err != nil {
 					if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseAbnormalClosure) {
 						log.Printf("websocket error: %v", err)

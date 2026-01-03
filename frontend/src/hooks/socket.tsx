@@ -11,9 +11,10 @@ export const useSocket = (sessionId: string) => {
         socket.onclose = () => setConnection(false);
 
         socket.onmessage = (event) => {
-            const batch = JSON.parse(event.data);
-            if (batch && batch.length > 0) {
-                addBatch(batch);
+            const payload = JSON.parse(event.data);
+            // { SessionID: string, Lap: number, Data: [] }
+            if (payload.Data && payload.Data.length > 0) {
+                addBatch(payload.Data, payload.Lap);
             }
         };
 
