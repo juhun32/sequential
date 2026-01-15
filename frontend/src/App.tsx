@@ -7,7 +7,7 @@ function App() {
     useSocket(sessionId);
 
     return (
-        <div className="min-h-screen bg-background font-mono p-8">
+        <div className="min-h-screen bg-background font-mono p-8 max-w-5xl mx-auto">
             <header>
                 <h1 className="tracking-tighter">
                     SEQUENTIAL //{" "}

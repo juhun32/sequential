@@ -66,7 +66,7 @@ export const TelemetryGraph = ({
                         : currentValue}
                 </span>
             </div>
-            <div className="relative h-12 w-full overflow-hidden">
+            <div className="relative h-24 w-full overflow-hidden">
                 <svg
                     viewBox={`0 0 100 ${height}`}
                     preserveAspectRatio="none"

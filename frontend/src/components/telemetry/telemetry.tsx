@@ -9,7 +9,14 @@ export const Telemetry = () => {
 
     return (
         <div className="w-full overflow-hidden flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="text-xs font-mono">
+                Total frames captured: {history.length}
+            </div>
+            <pre className="text-xs p-3 border rounded overflow-auto max-h-[300px] font-mono">
+                {JSON.stringify(history, null, 2)}
+            </pre>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <TelemetryGraph
                     data={recentHistory}
                     dataKey="Gas"
@@ -53,12 +60,6 @@ export const Telemetry = () => {
                     label="Speed (km/h)"
                 />
             </div>
-            <div className="text-xs font-mono">
-                Total frames captured: {history.length}
-            </div>
-            <pre className="text-xs p-4 border rounded overflow-auto max-h-[400px] font-mono">
-                {JSON.stringify(history, null, 2)}
-            </pre>
         </div>
     );
 };
