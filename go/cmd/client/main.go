@@ -48,6 +48,7 @@ func main() {
 	// the memory is managed by the OS, not the Go GC, therefore is "pinned" and it won't move.
 
 	batch := make([]types.SPageFilePhysics, 0)
+	// 100ms/10hz tick
 	ticker := time.NewTicker(100 * time.Millisecond)
 
 	// track the last packet ID to detect stale data
@@ -62,7 +63,6 @@ func main() {
 
 	for range ticker.C {
 		// direct memory access
-		// significantly faster than binary.Read
 		data := *physicsData
 		gData := *graphicsData
 
@@ -126,6 +126,8 @@ func openFileMapping(desiredAccess uint32, inheritHandle bool, name string) (win
 func logPhysics(d types.SPageFilePhysics) {
 	fmt.Printf("\n[BATCH SYNC @ %s]\n", time.Now().Format("15:04:05"))
 	fmt.Printf("	== PacketID: 		%d\n", d.PacketId)
+	fmt.Printf("	== Lap Time: 		%.0f ms\n", d.CurrentLapTime)
+	fmt.Printf("	== Position:     	%.d\n", d.CurrentPosition)
 	fmt.Printf("	== Speed:    		%.1f km/h\n", d.SpeedKmh)
 	fmt.Printf("	== RPM:      		%d\n", d.Rpms)
 	fmt.Printf("	== Gear:     		%d (R:-1, N:0)\n", (d.Gear - 1))
@@ -133,7 +135,7 @@ func logPhysics(d types.SPageFilePhysics) {
 	fmt.Printf("	== Steer Angle: 	%.2f\n\n", d.SteerAngle)
 }
 
-func sendToCloud(data []types.SPageFilePhysics, lap int32) {
+func sendToCloud(data interface{}, lap int32) {
 	// marshal the batch to JSON
 	jsonData, err := json.Marshal(data)
 	if err != nil {

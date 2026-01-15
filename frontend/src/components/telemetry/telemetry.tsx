@@ -19,9 +19,21 @@ export const Telemetry = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <TelemetryGraph
                     data={recentHistory}
+                    dataKey="SpeedKmh"
+                    color="rgba(236, 72, 153, 1)"
+                    label="Speed (km/h)"
+                />
+                <TelemetryGraph
+                    data={recentHistory}
+                    dataKey="Rpms"
+                    color="rgba(59, 130, 246, 1)"
+                    label="RPM"
+                />
+                <TelemetryGraph
+                    data={recentHistory}
                     dataKey="Gas"
                     color="rgba(16, 185, 129, 1)"
-                    label="Gas"
+                    label="Throttle"
                     minY={0}
                     maxY={1}
                 />
@@ -35,18 +47,6 @@ export const Telemetry = () => {
                 />
                 <TelemetryGraph
                     data={recentHistory}
-                    dataKey="Gear"
-                    color="rgba(245, 158, 11, 1)"
-                    label="Gear"
-                />
-                <TelemetryGraph
-                    data={recentHistory}
-                    dataKey="Rpms"
-                    color="rgba(59, 130, 246, 1)"
-                    label="RPM"
-                />
-                <TelemetryGraph
-                    data={recentHistory}
                     dataKey="SteerAngle"
                     color="rgba(139, 92, 246, 1)"
                     label="Steer Angle"
@@ -55,9 +55,9 @@ export const Telemetry = () => {
                 />
                 <TelemetryGraph
                     data={recentHistory}
-                    dataKey="SpeedKmh"
-                    color="rgba(236, 72, 153, 1)"
-                    label="Speed (km/h)"
+                    dataKey="Gear"
+                    color="rgba(245, 158, 11, 1)"
+                    label="Gear"
                 />
             </div>
         </div>

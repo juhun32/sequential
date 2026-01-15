@@ -71,9 +71,18 @@ export const LapList = () => {
     };
 
     // calculating global minmax for the overlap graph scaling
-    const { min, max } = useMemo(() => {
-        if (["Gas", "Brake"].includes(compareMetric)) return { min: 0, max: 1 };
-        if (compareMetric === "SteerAngle") return { min: -1, max: 1 };
+    const { min, max, maxLen } = useMemo(() => {
+        // calculate the maximum length (time) across all compared laps
+        let maxSamples = 0;
+        compareLaps.forEach((lapNum) => {
+            if (laps[lapNum].length > maxSamples)
+                maxSamples = laps[lapNum].length;
+        });
+
+        if (["Gas", "Brake"].includes(compareMetric))
+            return { min: 0, max: 1, maxLen: maxSamples };
+        if (compareMetric === "SteerAngle")
+            return { min: -1, max: 1, maxLen: maxSamples };
 
         let minVal = Infinity;
         let maxVal = -Infinity;
@@ -87,10 +96,10 @@ export const LapList = () => {
         });
 
         if (minVal === Infinity || minVal === maxVal) {
-            return { min: 0, max: 100 };
+            return { min: 0, max: 100, maxLen: maxSamples };
         }
 
-        return { min: minVal - 10, max: maxVal + 10 };
+        return { min: minVal - 10, max: maxVal + 10, maxLen: maxSamples };
     }, [laps, compareMetric, compareLaps]);
 
     return (
@@ -168,7 +177,7 @@ export const LapList = () => {
                     <svg
                         viewBox="0 0 100 100"
                         preserveAspectRatio="none"
-                        className="w-full h-full"
+                        className="w-full h-full p-2"
                     >
                         {compareLaps.map((lapNum) => {
                             const colorIdx = sortedLaps.indexOf(lapNum);
@@ -178,7 +187,9 @@ export const LapList = () => {
                             if (!data || !data.length) return null;
 
                             const range = max - min;
-                            const stepX = 100 / (data.length - 1 || 1);
+                            // calculate step based on the longest lap in the set, not the current lap's length.
+                            // this prevents stretching shorter laps to fill the width, which would distort the comparison
+                            const stepX = 100 / (maxLen - 1 || 1);
 
                             const points = data
                                 .map((d: any, i: number) => {
@@ -243,13 +254,13 @@ export const LapList = () => {
 
             {sortedLaps.map((lapNum) => (
                 <div key={lapNum}>
-                    <div className="flex items-baseline gap-3 mb-4">
-                        <h3 className="text-sm">LAP {lapNum}</h3>
+                    <div className="flex items-baseline gap-3 mb-3 border-b">
                         {lapNum === currentLap && (
                             <span className="text-xs text-green-400 px-1 rounded border">
                                 LIVE
                             </span>
                         )}
+                        <h3 className="text-sm">LAP {lapNum}</h3>
                         <span className="text-xs text-gray-500 font-mono ml-auto">
                             {laps[lapNum].length} SAMPLES
                         </span>
