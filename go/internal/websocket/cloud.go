@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"log"
+	"strings"
 
 	"cmd/internal/database"
 	"cmd/types"
@@ -40,7 +41,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
-			log.Println("New Dashboard Connected")
+			log.Println("new dashboard connected")
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -49,22 +50,49 @@ func (h *Hub) Run() {
 				client.Close()
 			}
 			h.mu.Unlock()
-			log.Println("Dashboard Disconnected")
+			log.Println("dashboard disconnected")
 
 		case payload := <-h.broadcast:
 			// braodcast path: live to dashboards
 			h.mu.RLock()
+
+			// we cannot delete from the map while iterating with
+			// only a read lock concurrently, or even a write lock safely if we modify while ranging.
+			// pattern is to iterate and collect dead connections.
+			var deadClients []*websocket.Conn
+
 			for client := range h.clients {
 				err := client.WriteJSON(payload)
 				if err != nil {
-					if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseAbnormalClosure) {
-						log.Printf("websocket error: %v", err)
+					// filter out normal close errors & the windows specific "wsasend" error
+					// which happens when the client closes the connection abruptly
+					// like browser refresh/crash
+					isExpectedError := websocket.IsCloseError(err,
+						websocket.CloseGoingAway,
+						websocket.CloseNormalClosure,
+						websocket.CloseAbnormalClosure) ||
+						strings.Contains(err.Error(), "wsasend") ||
+						strings.Contains(err.Error(), "connection was aborted")
+
+					if !isExpectedError {
+						log.Printf("websocket write error: %v", err)
 					}
-					client.Close()
-					delete(h.clients, client)
+					deadClients = append(deadClients, client)
 				}
 			}
 			h.mu.RUnlock()
+
+			// clean up dead clients outside the RLock
+			if len(deadClients) > 0 {
+				h.mu.Lock()
+				for _, client := range deadClients {
+					if _, ok := h.clients[client]; ok {
+						client.Close()
+						delete(h.clients, client)
+					}
+				}
+				h.mu.Unlock()
+			}
 
 			// db queue path: persistence, analytics path
 			// buffer: aggregate frames to reduce DB pressure

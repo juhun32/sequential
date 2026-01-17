@@ -13,8 +13,10 @@ type SPageFilePhysics struct {
 
 	// this field will read the next physics value from memory,
 	// but we overwrite it with the actual lap time from graphics memory
-	CurrentLapTime  float32 `json:"currentLapTime"`
-	CurrentPosition int32   `json:"currentPosition"`
+	CurrentLapTime float32 `json:"currentLapTime"`
+	Lap            int32   `json:"lap"`
+
+	CurrentPosition int32 `json:"currentPosition"`
 }
 
 type SPageFileGraphics struct {

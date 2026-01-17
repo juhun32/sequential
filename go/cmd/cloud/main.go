@@ -74,9 +74,11 @@ func main() {
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Println("error:", err)
+			log.Println("upgrade error:", err)
 			return
 		}
+
+		log.Printf("new ws client connected: %s", conn.RemoteAddr())
 		hub.RegisterClient(conn)
 	})
 

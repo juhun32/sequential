@@ -3,12 +3,13 @@ import { useTelemetryStore } from "../../store/store";
 import { TelemetryGraph } from "./graph";
 
 const METRICS = [
-    { key: "SpeedKmh", label: "Speed" },
-    { key: "Rpms", label: "RPM" },
-    { key: "Gas", label: "Throttle" },
-    { key: "Brake", label: "Brake" },
-    { key: "SteerAngle", label: "Steering" },
-    { key: "Gear", label: "Gear" },
+    { key: "speedKmh", label: "Speed" },
+    { key: "rpms", label: "RPM" },
+    { key: "gas", label: "Throttle" },
+    { key: "brake", label: "Brake" },
+    { key: "steerAngle", label: "Steering" },
+    { key: "gear", label: "Gear" },
+    { key: "fuel", label: "Fuel" },
 ];
 
 const COLORS = [
@@ -24,9 +25,17 @@ const COLORS = [
     "#d946ef",
 ];
 
+const formatTime = (ms: number) => {
+    if (ms === undefined || ms === null || ms < 0) return "--:--.---";
+    const min = Math.floor(ms / 60000);
+    const sec = Math.floor((ms % 60000) / 1000);
+    const mil = Math.floor(ms % 1000);
+    return `${min}:${sec.toString().padStart(2, "0")}.${mil.toString().padStart(3, "0")}`;
+};
+
 export const LapList = () => {
     const { history, currentLap } = useTelemetryStore() as any;
-    const [compareMetric, setCompareMetric] = useState("SpeedKmh");
+    const [compareMetric, setCompareMetric] = useState("speedKmh");
     const [selectedLaps, setSelectedLaps] = useState<number[]>([]);
     const [isLapSelectOpen, setIsLapSelectOpen] = useState(false);
 
@@ -62,11 +71,13 @@ export const LapList = () => {
     // The laps actually shown on the comparison graph
     const compareLaps = availableLaps.filter((l) => selectedLaps.includes(l));
 
+    console.log("laps", laps);
+
     const toggleLapSelection = (lapNum: number) => {
         setSelectedLaps((prev) =>
             prev.includes(lapNum)
                 ? prev.filter((l) => l !== lapNum)
-                : [...prev, lapNum]
+                : [...prev, lapNum],
         );
     };
 
@@ -129,7 +140,7 @@ export const LapList = () => {
                                         <input
                                             type="checkbox"
                                             checked={selectedLaps.includes(
-                                                lapNum
+                                                lapNum,
                                             )}
                                             onChange={() =>
                                                 toggleLapSelection(lapNum)
@@ -138,6 +149,13 @@ export const LapList = () => {
                                         <span>
                                             Lap {lapNum}{" "}
                                             {lapNum === currentLap && "(Live)"}
+                                            <p className="text-xs font-mono">
+                                                {formatTime(
+                                                    laps[lapNum][
+                                                        laps[lapNum].length - 1
+                                                    ]?.currentLapTime ?? 0,
+                                                )}
+                                            </p>
                                         </span>
                                     </label>
                                 ))}
@@ -217,101 +235,87 @@ export const LapList = () => {
                         })}
                     </svg>
                 )}
-
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                    {compareLaps.map((lapNum) => {
-                        const colorIdx = sortedLaps.indexOf(lapNum);
-                        const color = COLORS[colorIdx % COLORS.length];
-
-                        return (
-                            <div
-                                key={lapNum}
-                                className="flex items-center gap-2 text-xs"
-                            >
-                                <div
-                                    className="w-3 h-3 rounded-full"
-                                    style={{
-                                        backgroundColor: color,
-                                    }}
-                                />
-                                <span
-                                    className={
-                                        lapNum === currentLap
-                                            ? "font-semibold"
-                                            : "text-gray-400 font-mono"
-                                    }
-                                >
-                                    LAP {lapNum}{" "}
-                                    {lapNum === currentLap && "(LIVE)"}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
             </div>
 
             <h2 className="border-b pt-4">SESSION HISTORY</h2>
 
-            {sortedLaps.map((lapNum) => (
-                <div key={lapNum}>
-                    <div className="flex items-baseline gap-3 mb-3 border-b">
-                        {lapNum === currentLap && (
-                            <span className="text-xs text-green-400 px-1 rounded border">
-                                LIVE
-                            </span>
-                        )}
-                        <h3 className="text-sm">LAP {lapNum}</h3>
-                        <span className="text-xs text-gray-500 font-mono ml-auto">
-                            {laps[lapNum].length} SAMPLES
-                        </span>
-                    </div>
+            {sortedLaps.map((lapNum) => {
+                const lapFrames = laps[lapNum];
+                // calculating approximate lap time from the last frame's current time
+                const lapTimeVal =
+                    lapFrames[lapFrames.length - 1]?.currentLapTime ?? 0;
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="SpeedKmh"
-                            color="rgba(96, 165, 250, 1)"
-                            label="Speed"
-                        />
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="Rpms"
-                            color="rgba(248, 113, 113, 1)"
-                            label="RPM"
-                        />
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="Gas"
-                            color="rgba(74, 222, 128, 1)"
-                            label="Throttle"
-                            minY={0}
-                            maxY={1}
-                        />
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="Brake"
-                            color="rgba(251, 191, 36, 1)"
-                            label="Brake"
-                            minY={0}
-                            maxY={1}
-                        />
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="SteerAngle"
-                            color="rgba(168, 85, 247, 1)"
-                            label="Steering"
-                            minY={-1}
-                            maxY={1}
-                        />
-                        <TelemetryGraph
-                            data={laps[lapNum]}
-                            dataKey="Gear"
-                            color="rgba(14, 165, 233, 1)"
-                            label="Gear"
-                        />
+                return (
+                    <div key={lapNum}>
+                        <div className="flex items-baseline gap-3 mb-3 border-b pb-1">
+                            {lapNum === currentLap && (
+                                <span className="text-xs text-green-400 px-1 rounded border">
+                                    LIVE
+                                </span>
+                            )}
+                            <h3 className="text-sm">LAP {lapNum}</h3>
+                            <span className="text-sm font-mono">
+                                {formatTime(lapTimeVal)}
+                            </span>
+
+                            <span className="text-xs text-gray-500 font-mono ml-auto">
+                                {lapFrames.length} samples
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="speedKmh"
+                                color="rgba(96, 165, 250, 1)"
+                                label="Speed"
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="rpms"
+                                color="rgba(248, 113, 113, 1)"
+                                label="RPM"
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="gas"
+                                color="rgba(74, 222, 128, 1)"
+                                label="Throttle"
+                                minY={0}
+                                maxY={1}
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="brake"
+                                color="rgba(251, 191, 36, 1)"
+                                label="Brake"
+                                minY={0}
+                                maxY={1}
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="steerAngle"
+                                color="rgba(168, 85, 247, 1)"
+                                label="Steering"
+                                minY={-1}
+                                maxY={1}
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="gear"
+                                color="rgba(14, 165, 233, 1)"
+                                label="Gear"
+                            />
+                            <TelemetryGraph
+                                data={lapFrames}
+                                dataKey="fuel"
+                                color="rgba(234, 179, 8, 1)"
+                                label="Fuel Level"
+                            />
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 };

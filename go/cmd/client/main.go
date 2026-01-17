@@ -66,6 +66,9 @@ func main() {
 		data := *physicsData
 		gData := *graphicsData
 
+		data.CurrentLapTime = float32(gData.CurrentTimeInt)
+		data.Lap = lastCompletedLaps
+
 		// check for lap completion
 		if gData.CompletedLaps > lastCompletedLaps {
 			log.Printf("lap completed - lap count: %d", gData.CompletedLaps)
@@ -126,13 +129,14 @@ func openFileMapping(desiredAccess uint32, inheritHandle bool, name string) (win
 func logPhysics(d types.SPageFilePhysics) {
 	fmt.Printf("\n[BATCH SYNC @ %s]\n", time.Now().Format("15:04:05"))
 	fmt.Printf("	== PacketID: 		%d\n", d.PacketId)
+	fmt.Printf("	== Lap:      		%d\n", d.Lap)
 	fmt.Printf("	== Lap Time: 		%.0f ms\n", d.CurrentLapTime)
-	fmt.Printf("	== Position:     	%.d\n", d.CurrentPosition)
 	fmt.Printf("	== Speed:    		%.1f km/h\n", d.SpeedKmh)
 	fmt.Printf("	== RPM:      		%d\n", d.Rpms)
 	fmt.Printf("	== Gear:     		%d (R:-1, N:0)\n", (d.Gear - 1))
 	fmt.Printf("	== Pedals:   		G:%.3f / B:%.3f\n", d.Gas, d.Brake)
-	fmt.Printf("	== Steer Angle: 	%.2f\n\n", d.SteerAngle)
+	fmt.Printf("	== Steer Angle: 	%.2f\n", d.SteerAngle)
+	fmt.Printf("	== Position: 		%f\n\n", float32(d.CurrentPosition))
 }
 
 func sendToCloud(data interface{}, lap int32) {
