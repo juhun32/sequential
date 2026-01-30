@@ -20,9 +20,32 @@ var (
 )
 
 func main() {
+	// Watch for manual reset
+	resetChan := make(chan struct{})
+	go func() {
+		fmt.Println("FTrace Client Running.")
+		fmt.Println("Press [ENTER] at any time to force a memory access reset.")
+		for {
+			var input string
+			fmt.Scanln(&input)
+			resetChan <- struct{}{}
+		}
+	}()
+
+	for {
+		err := traceSession(resetChan)
+		if err != nil {
+			log.Printf("Trace session ended: %v", err)
+		}
+		log.Println("Re-initializing memory map in 1 second...")
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func traceSession(resetChan <-chan struct{}) error {
 	handle, err := openFileMapping(windows.FILE_MAP_READ, false, "Local\\acpmf_physics")
 	if err != nil {
-		log.Fatal("memory map not found.")
+		return fmt.Errorf("physics memory map not found: %w", err)
 	}
 	defer windows.CloseHandle(handle)
 
@@ -32,7 +55,7 @@ func main() {
 	// graphics memory map for lap data
 	handleGraphics, err := openFileMapping(windows.FILE_MAP_READ, false, "Local\\acpmf_graphics")
 	if err != nil {
-		log.Fatal("graphics memory map not found.")
+		return fmt.Errorf("graphics memory map not found: %w", err)
 	}
 	defer windows.CloseHandle(handleGraphics)
 
@@ -50,6 +73,7 @@ func main() {
 	batch := make([]types.SPageFilePhysics, 0)
 	// 100ms/10hz tick
 	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
 	// track the last packet ID to detect stale data
 	// shared memory keeps updating even when the game is paused or closed
@@ -61,42 +85,60 @@ func main() {
 	// init current laps to avoid triggering on startup
 	var lastCompletedLaps int32 = graphicsData.CompletedLaps
 
-	for range ticker.C {
-		// direct memory access
-		data := *physicsData
-		gData := *graphicsData
+	if physicsData.PacketId > 0 {
+		log.Printf("connected. current session laps: %d", lastCompletedLaps)
+	}
 
-		data.CurrentLapTime = float32(gData.CurrentTimeInt)
-		data.Lap = lastCompletedLaps
+	for {
+		select {
+		case <-resetChan:
+			return fmt.Errorf("manual reset requested")
+		case <-ticker.C:
+			// direct memory access
+			data := *physicsData
+			gData := *graphicsData
 
-		// check for lap completion
-		if gData.CompletedLaps > lastCompletedLaps {
-			log.Printf("lap completed - lap count: %d", gData.CompletedLaps)
+			// detect session reset (lap count dropped)
+			// so this happens when you restart the session or change track
+			if gData.CompletedLaps < lastCompletedLaps {
+				log.Printf("session reset detected: resetting batch")
+				lastCompletedLaps = gData.CompletedLaps
+				batch = nil
+				lastPacketId = -1
+			}
 
-			// send current batch on lap finish; belongs to previous lap
-			if len(batch) > 0 {
+			data.CurrentLapTime = float32(gData.CurrentTimeInt)
+			data.Lap = lastCompletedLaps
+
+			// check for lap completion
+			if gData.CompletedLaps > lastCompletedLaps {
+				log.Printf("lap completed - lap count: %d", gData.CompletedLaps)
+
+				// send current batch on lap finish; belongs to previous lap
+				if len(batch) > 0 {
+					go sendToCloud(batch, lastCompletedLaps)
+					batch = nil
+				}
+
+				lastCompletedLaps = gData.CompletedLaps
+			}
+
+			// if the packet ID hasnt changed, the game is likely paused or closed.
+			// we shouldn't send duplicate frames.
+			if data.PacketId == lastPacketId {
+				continue
+			}
+			lastPacketId = data.PacketId
+
+			batch = append(batch, data)
+
+			if len(batch) >= 20 {
+				// logging: check the last frame of the batch
+				logPhysics(batch[len(batch)-1])
+
 				go sendToCloud(batch, lastCompletedLaps)
 				batch = nil
 			}
-
-			lastCompletedLaps = gData.CompletedLaps
-		}
-
-		// if the packet ID hasnt changed, the game is likely paused or closed.
-		// we shouldn't send duplicate frames.
-		if data.PacketId == lastPacketId {
-			continue
-		}
-		lastPacketId = data.PacketId
-
-		batch = append(batch, data)
-
-		if len(batch) >= 20 {
-			// logging: check the last frame of the batch
-			logPhysics(batch[len(batch)-1])
-
-			go sendToCloud(batch, lastCompletedLaps)
-			batch = nil
 		}
 	}
 }
