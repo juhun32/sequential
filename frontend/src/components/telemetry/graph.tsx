@@ -57,7 +57,7 @@ export const TelemetryGraph = ({
     const currentValue = data.length > 0 ? data[data.length - 1][dataKey] : 0;
 
     return (
-        <div className="border rounded p-2">
+        <div className="border p-2 bg-foreground">
             <div className="flex justify-between items-center text-xs font-mono mb-2 text-gray-400">
                 <span className="uppercase tracking-wider">{label}</span>
                 <span style={{ color }} className="font-bold">
@@ -75,7 +75,7 @@ export const TelemetryGraph = ({
                     <polyline
                         fill="none"
                         stroke={color}
-                        strokeWidth="1"
+                        strokeWidth="0.9"
                         points={points}
                         vectorEffect="non-scaling-stroke"
                     />

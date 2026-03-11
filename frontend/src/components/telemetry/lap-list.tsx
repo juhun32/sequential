@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useTelemetryStore } from "../../store/store";
 import { TelemetryGraph } from "./graph";
+import { formatTime, getLapTimeForLap, groupFramesByLap } from "./lap-methods";
+import { Button } from "../ui/button";
 
 const METRICS = [
     { key: "speedKmh", label: "Speed" },
@@ -25,29 +27,13 @@ const COLORS = [
     "#d946ef",
 ];
 
-const formatTime = (ms: number) => {
-    if (ms === undefined || ms === null || ms < 0) return "--:--.---";
-    const min = Math.floor(ms / 60000);
-    const sec = Math.floor((ms % 60000) / 1000);
-    const mil = Math.floor(ms % 1000);
-    return `${min}:${sec.toString().padStart(2, "0")}.${mil.toString().padStart(3, "0")}`;
-};
-
 export const LapList = () => {
     const { history, currentLap } = useTelemetryStore() as any;
     const [compareMetric, setCompareMetric] = useState("speedKmh");
     const [selectedLaps, setSelectedLaps] = useState<number[]>([]);
     const [isLapSelectOpen, setIsLapSelectOpen] = useState(false);
 
-    const laps = useMemo(() => {
-        const grouped: Record<string, any[]> = {};
-        history.forEach((frame: any) => {
-            const lapNum = frame.lap ?? 0;
-            if (!grouped[lapNum]) grouped[lapNum] = [];
-            grouped[lapNum].push(frame);
-        });
-        return grouped;
-    }, [history]);
+    const laps = useMemo(() => groupFramesByLap(history), [history]);
 
     const sortedLaps = Object.keys(laps)
         .map(Number)
@@ -66,12 +52,10 @@ export const LapList = () => {
         if (selectedLaps.length === 0 && availableLaps.length > 0) {
             setSelectedLaps(availableLaps.slice(0, 3));
         }
-    }, [availableLaps.length]);
+    }, [availableLaps, selectedLaps.length]);
 
     // The laps actually shown on the comparison graph
     const compareLaps = availableLaps.filter((l) => selectedLaps.includes(l));
-
-    console.log("laps", laps);
 
     const toggleLapSelection = (lapNum: number) => {
         setSelectedLaps((prev) =>
@@ -90,9 +74,9 @@ export const LapList = () => {
                 maxSamples = laps[lapNum].length;
         });
 
-        if (["Gas", "Brake"].includes(compareMetric))
+        if (["gas", "brake"].includes(compareMetric))
             return { min: 0, max: 1, maxLen: maxSamples };
-        if (compareMetric === "SteerAngle")
+        if (compareMetric === "steerAngle")
             return { min: -1, max: 1, maxLen: maxSamples };
 
         let minVal = Infinity;
@@ -120,22 +104,24 @@ export const LapList = () => {
 
                 <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                     <div className="relative z-10">
-                        <button
+                        <Button
+                            size={"xs"}
+                            variant={"outline"}
                             onClick={() => setIsLapSelectOpen(!isLapSelectOpen)}
-                            className="px-3 py-1 text-xs rounded border flex items-center gap-2"
+                            className="px-3 py-1 text-xs border flex items-center gap-2"
                         >
                             <span>Select Laps ({compareLaps.length})</span>
                             <span className="text-xs">
                                 {isLapSelectOpen ? "▲" : "▼"}
                             </span>
-                        </button>
+                        </Button>
 
                         {isLapSelectOpen && (
-                            <div className="absolute top-full left-0 mt-1 w-full border rounded max-h-60 overflow-y-auto bg-white">
+                            <div className="absolute top-full left-0 mt-1 w-full border max-h-60 overflow-y-auto">
                                 {availableLaps.map((lapNum) => (
                                     <label
                                         key={lapNum}
-                                        className="flex items-center gap-3 px-2 py-1 rounded cursor-pointer text-xs"
+                                        className="flex items-center gap-1 px-2 py-1 cursor-pointer text-xs"
                                     >
                                         <input
                                             type="checkbox"
@@ -151,9 +137,10 @@ export const LapList = () => {
                                             {lapNum === currentLap && "(Live)"}
                                             <p className="text-xs font-mono">
                                                 {formatTime(
-                                                    laps[lapNum][
-                                                        laps[lapNum].length - 1
-                                                    ]?.currentLapTime ?? 0,
+                                                    getLapTimeForLap(
+                                                        laps,
+                                                        lapNum,
+                                                    ),
                                                 )}
                                             </p>
                                         </span>
@@ -168,25 +155,27 @@ export const LapList = () => {
                         )}
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-1">
                         {METRICS.map((m) => (
-                            <button
+                            <Button
+                                size={"xs"}
+                                variant={"outline"}
                                 key={m.key}
                                 onClick={() => setCompareMetric(m.key)}
-                                className={`px-2 py-0.5 text-xs rounded border transition-colors hover:cursor-pointer ${
+                                className={`px-2 py-0.5 text-xs border transition-colors hover:cursor-pointer ${
                                     compareMetric === m.key
                                         ? "bg-black text-white"
                                         : ""
                                 }`}
                             >
                                 {m.label}
-                            </button>
+                            </Button>
                         ))}
                     </div>
                 </div>
             </div>
 
-            <div className="relative h-64 w-full border border-gray-800 rounded overflow-hidden mb-4">
+            <div className="relative h-64 w-full border overflow-hidden mb-4 bg-foreground">
                 {compareLaps.length === 0 ? (
                     <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
                         Select laps above to compare
@@ -226,7 +215,7 @@ export const LapList = () => {
                                     fill="none"
                                     stroke={color}
                                     strokeWidth={
-                                        lapNum === currentLap ? "0.8" : "0.4"
+                                        lapNum === currentLap ? "0.9" : "0.7"
                                     }
                                     vectorEffect="non-scaling-stroke"
                                     opacity={lapNum === currentLap ? 1 : 0.7}
@@ -242,14 +231,13 @@ export const LapList = () => {
             {sortedLaps.map((lapNum) => {
                 const lapFrames = laps[lapNum];
                 // calculating approximate lap time from the last frame's current time
-                const lapTimeVal =
-                    lapFrames[lapFrames.length - 1]?.currentLapTime ?? 0;
+                const lapTimeVal = getLapTimeForLap(laps, lapNum);
 
                 return (
                     <div key={lapNum}>
-                        <div className="flex items-baseline gap-3 mb-3 border-b pb-1">
+                        <div className="flex items-baseline gap-1 mb-3 border-b pb-1">
                             {lapNum === currentLap && (
-                                <span className="text-xs text-green-400 px-1 rounded border">
+                                <span className="text-xs text-green-400 px-1 border">
                                     LIVE
                                 </span>
                             )}
@@ -263,7 +251,7 @@ export const LapList = () => {
                             </span>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-1">
                             <TelemetryGraph
                                 data={lapFrames}
                                 dataKey="speedKmh"
