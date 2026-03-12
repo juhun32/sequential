@@ -1,21 +1,9 @@
 import { useMemo } from "react";
-
-const sampleForRender = (data: any[], maxPoints: number) => {
-    if (data.length <= maxPoints) return data;
-
-    const sampled: any[] = [];
-    const step = (data.length - 1) / (maxPoints - 1);
-
-    for (let i = 0; i < maxPoints; i += 1) {
-        const idx = Math.round(i * step);
-        sampled.push(data[idx]);
-    }
-
-    return sampled;
-};
+import type { TelemetryFrame } from "./lap-methods";
+import { sampleForRender } from "../../lib/telemetry";
 
 interface TelemetryGraphProps {
-    data: any[];
+    data: TelemetryFrame[];
     dataKey: string;
     color: string;
     label: string;

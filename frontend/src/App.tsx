@@ -24,8 +24,8 @@ function App() {
         <div className="min-h-screen bg-background font-mono p-8 mx-auto">
             <header>
                 <h1 className="tracking-tighter">
-                    SEQUENTIAL //{" "}
-                    <span className="text-gray-400">{sessionId}</span>
+                    SEQUENTIAL{" "}
+                    <span className="text-gray-400 text-xs">{sessionId}</span>
                 </h1>
             </header>
 
