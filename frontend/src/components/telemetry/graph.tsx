@@ -1,5 +1,19 @@
 import { useMemo } from "react";
 
+const sampleForRender = (data: any[], maxPoints: number) => {
+    if (data.length <= maxPoints) return data;
+
+    const sampled: any[] = [];
+    const step = (data.length - 1) / (maxPoints - 1);
+
+    for (let i = 0; i < maxPoints; i += 1) {
+        const idx = Math.round(i * step);
+        sampled.push(data[idx]);
+    }
+
+    return sampled;
+};
+
 interface TelemetryGraphProps {
     data: any[];
     dataKey: string;
@@ -7,6 +21,8 @@ interface TelemetryGraphProps {
     label: string;
     minY?: number;
     maxY?: number;
+    showGrid?: boolean;
+    maxPoints?: number;
 }
 
 export const TelemetryGraph = ({
@@ -16,18 +32,30 @@ export const TelemetryGraph = ({
     label,
     minY,
     maxY,
+    showGrid = true,
+    maxPoints = 140,
 }: TelemetryGraphProps) => {
     const height = 50;
 
+    const renderData = useMemo(
+        () => sampleForRender(data, maxPoints),
+        [data, maxPoints],
+    );
+
     const points = useMemo(() => {
-        if (!data.length) return "";
+        if (!renderData.length) return "";
+
+        const numericValues = renderData
+            .map((d) => Number(d[dataKey]))
+            .filter((value) => Number.isFinite(value));
+
+        if (numericValues.length === 0) return "";
 
         let min = minY ?? Infinity;
         let max = maxY ?? -Infinity;
 
         if (minY === undefined || maxY === undefined) {
-            data.forEach((d) => {
-                const val = Number(d[dataKey]);
+            numericValues.forEach((val) => {
                 if (val < min) min = val;
                 if (val > max) max = val;
             });
@@ -40,30 +68,33 @@ export const TelemetryGraph = ({
         }
 
         const range = max - min;
-        const stepX = 100 / (data.length - 1 || 1);
+        const stepX = 100 / (renderData.length - 1 || 1);
 
-        return data
+        return renderData
             .map((d, i) => {
                 const x = i * stepX;
-                const val = Number(d[dataKey]);
+                const rawValue = Number(d[dataKey]);
+                const val = Number.isFinite(rawValue) ? rawValue : min;
                 // invert Y because SVG coords start topleft
                 const normalizedY = (val - min) / range;
                 const y = height - normalizedY * height;
                 return `${x},${y}`;
             })
             .join(" ");
-    }, [data, dataKey, minY, maxY]);
+    }, [renderData, dataKey, minY, maxY]);
 
-    const currentValue = data.length > 0 ? data[data.length - 1][dataKey] : 0;
+    const rawCurrentValue =
+        data.length > 0 ? Number(data[data.length - 1][dataKey]) : NaN;
+    const currentValue = Number.isFinite(rawCurrentValue)
+        ? rawCurrentValue
+        : null;
 
     return (
         <div className="border p-2 bg-foreground">
             <div className="flex justify-between items-center text-xs font-mono mb-2 text-gray-400">
                 <span className="uppercase tracking-wider">{label}</span>
                 <span style={{ color }} className="font-bold">
-                    {typeof currentValue === "number"
-                        ? currentValue.toFixed(2)
-                        : currentValue}
+                    {currentValue === null ? "--" : currentValue.toFixed(2)}
                 </span>
             </div>
             <div className="relative h-24 w-full overflow-hidden">
@@ -72,6 +103,32 @@ export const TelemetryGraph = ({
                     preserveAspectRatio="none"
                     className="w-full h-full"
                 >
+                    {showGrid && (
+                        <>
+                            {Array.from({ length: 11 }, (_, i) => (
+                                <line
+                                    key={`v-${i}`}
+                                    x1={i * 10}
+                                    y1={0}
+                                    x2={i * 10}
+                                    y2={height}
+                                    stroke="rgba(148, 163, 184, 0.12)"
+                                    strokeWidth="0.22"
+                                />
+                            ))}
+                            {Array.from({ length: 6 }, (_, i) => (
+                                <line
+                                    key={`h-${i}`}
+                                    x1={0}
+                                    y1={(i * height) / 5}
+                                    x2={100}
+                                    y2={(i * height) / 5}
+                                    stroke="rgba(148, 163, 184, 0.12)"
+                                    strokeWidth="0.22"
+                                />
+                            ))}
+                        </>
+                    )}
                     <polyline
                         fill="none"
                         stroke={color}

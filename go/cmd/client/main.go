@@ -19,6 +19,12 @@ var (
 	procOpenFileMappingW = modkernel32.NewProc("OpenFileMappingW")
 )
 
+const (
+	assettoSharedInfoInterval = 3000 * time.Millisecond
+	assettoGraphicsInterval   = 10000 * time.Millisecond
+	assettoPhysicsInterval    = 10 * time.Millisecond
+)
+
 func main() {
 	// Watch for manual reset
 	resetChan := make(chan struct{})
@@ -70,9 +76,8 @@ func traceSession(resetChan <-chan struct{}) error {
 	// even if go vet warns about uintptr conversion.
 	// the memory is managed by the OS, not the Go GC, therefore is "pinned" and it won't move.
 
-	batch := make([]types.SPageFilePhysics, 0)
-	// 100ms/10hz tick
-	ticker := time.NewTicker(100 * time.Millisecond)
+	batch := make([]types.SPageFilePhysics, 0, 64)
+	ticker := time.NewTicker(assettoPhysicsInterval)
 	defer ticker.Stop()
 
 	// track the last packet ID to detect stale data
@@ -84,6 +89,14 @@ func traceSession(resetChan <-chan struct{}) error {
 
 	// init current laps to avoid triggering on startup
 	var lastCompletedLaps int32 = graphicsData.CompletedLaps
+	var lastSectorIdx int32 = graphicsData.CurrentSectorIndex
+	if lastSectorIdx < 0 {
+		lastSectorIdx = 0
+	}
+	var sectorStartLapTime int32 = graphicsData.CurrentTimeInt
+
+	var lastSharedInfoLog time.Time
+	var lastGraphicsLog time.Time
 
 	if physicsData.PacketId > 0 {
 		log.Printf("connected. current session laps: %d", lastCompletedLaps)
@@ -98,17 +111,29 @@ func traceSession(resetChan <-chan struct{}) error {
 			data := *physicsData
 			gData := *graphicsData
 
+			now := time.Now()
+			if now.Sub(lastSharedInfoLog) >= assettoSharedInfoInterval {
+				log.Printf("ac shared info tick: lap=%d", gData.CompletedLaps)
+				lastSharedInfoLog = now
+			}
+			if now.Sub(lastGraphicsLog) >= assettoGraphicsInterval {
+				log.Printf("ac graphics tick: lap=%d sector=%d lapTime=%dms", gData.CompletedLaps, gData.CurrentSectorIndex+1, gData.CurrentTimeInt)
+				lastGraphicsLog = now
+			}
+
 			// detect session reset (lap count dropped)
 			// so this happens when you restart the session or change track
 			if gData.CompletedLaps < lastCompletedLaps {
 				log.Printf("session reset detected: resetting batch")
 				lastCompletedLaps = gData.CompletedLaps
+				lastSectorIdx = gData.CurrentSectorIndex
+				if lastSectorIdx < 0 {
+					lastSectorIdx = 0
+				}
+				sectorStartLapTime = gData.CurrentTimeInt
 				batch = nil
 				lastPacketId = -1
 			}
-
-			data.CurrentLapTime = float32(gData.CurrentTimeInt)
-			data.Lap = lastCompletedLaps
 
 			// check for lap completion
 			if gData.CompletedLaps > lastCompletedLaps {
@@ -121,7 +146,42 @@ func traceSession(resetChan <-chan struct{}) error {
 				}
 
 				lastCompletedLaps = gData.CompletedLaps
+				lastSectorIdx = gData.CurrentSectorIndex
+				if lastSectorIdx < 0 {
+					lastSectorIdx = 0
+				}
+				sectorStartLapTime = gData.CurrentTimeInt
 			}
+
+			data.CurrentLapTime = float32(gData.CurrentTimeInt)
+			data.Lap = lastCompletedLaps
+			data.CurrentPosition = gData.Position
+
+			currentSectorIdx := gData.CurrentSectorIndex
+			if currentSectorIdx < 0 {
+				currentSectorIdx = 0
+			}
+
+			if currentSectorIdx != lastSectorIdx || gData.CurrentTimeInt < sectorStartLapTime {
+				sectorStartLapTime = gData.CurrentTimeInt
+				lastSectorIdx = currentSectorIdx
+			}
+
+			sectorNum := currentSectorIdx + 1
+			if sectorNum < 1 {
+				sectorNum = 1
+			}
+			if sectorNum > 3 {
+				sectorNum = 3
+			}
+
+			data.Sector = sectorNum
+			data.SectorTime = gData.CurrentTimeInt - sectorStartLapTime
+			if data.SectorTime < 0 {
+				data.SectorTime = 0
+			}
+
+			fillChassisMovement(&data)
 
 			// if the packet ID hasnt changed, the game is likely paused or closed.
 			// we shouldn't send duplicate frames.
@@ -141,6 +201,34 @@ func traceSession(resetChan <-chan struct{}) error {
 			}
 		}
 	}
+}
+
+func fillChassisMovement(data *types.SPageFilePhysics) {
+	data.SuspensionFL = data.SuspensionTravel[0]
+	data.SuspensionFR = data.SuspensionTravel[1]
+	data.SuspensionRL = data.SuspensionTravel[2]
+	data.SuspensionRR = data.SuspensionTravel[3]
+
+	data.WheelLoadFL = data.WheelLoad[0]
+	data.WheelLoadFR = data.WheelLoad[1]
+	data.WheelLoadRL = data.WheelLoad[2]
+	data.WheelLoadRR = data.WheelLoad[3]
+
+	data.RideHeightFront = data.RideHeight[0]
+	data.RideHeightRear = data.RideHeight[1]
+	data.RideHeightAvg = (data.RideHeightFront + data.RideHeightRear) / 2
+
+	data.ChassisHeave = (data.RideHeightFront + data.RideHeightRear) / 2
+	data.ChassisPitch = data.RideHeightRear - data.RideHeightFront
+	data.ChassisYaw = data.Heading
+
+	leftTravel := (data.SuspensionFL + data.SuspensionRL) / 2
+	rightTravel := (data.SuspensionFR + data.SuspensionRR) / 2
+	frontTravel := (data.SuspensionFL + data.SuspensionFR) / 2
+	rearTravel := (data.SuspensionRL + data.SuspensionRR) / 2
+
+	data.ChassisRoll = rightTravel - leftTravel
+	data.SuspensionBalance = frontTravel - rearTravel
 }
 
 // wraps the Windows API OpenFileMappingW function
@@ -172,13 +260,16 @@ func logPhysics(d types.SPageFilePhysics) {
 	fmt.Printf("\n[BATCH SYNC @ %s]\n", time.Now().Format("15:04:05"))
 	fmt.Printf("	== PacketID: 		%d\n", d.PacketId)
 	fmt.Printf("	== Lap:      		%d\n", d.Lap)
+	fmt.Printf("	== Sector:   		%d (%d ms)\n", d.Sector, d.SectorTime)
 	fmt.Printf("	== Lap Time: 		%.0f ms\n", d.CurrentLapTime)
 	fmt.Printf("	== Speed:    		%.1f km/h\n", d.SpeedKmh)
 	fmt.Printf("	== RPM:      		%d\n", d.Rpms)
 	fmt.Printf("	== Gear:     		%d (R:-1, N:0)\n", (d.Gear - 1))
 	fmt.Printf("	== Pedals:   		G:%.3f / B:%.3f\n", d.Gas, d.Brake)
 	fmt.Printf("	== Steer Angle: 	%.2f\n", d.SteerAngle)
-	fmt.Printf("	== Position: 		%f\n\n", float32(d.CurrentPosition))
+	fmt.Printf("	== Chassis:  		Pitch %.4f | Roll %.4f | Yaw %.4f\n", d.ChassisPitch, d.ChassisRoll, d.ChassisYaw)
+	fmt.Printf("	== RideHeight:		Front %.4f | Rear %.4f | Avg %.4f\n", d.RideHeightFront, d.RideHeightRear, d.RideHeightAvg)
+	fmt.Printf("	== Position: 		%d\n\n", d.CurrentPosition)
 }
 
 func sendToCloud(data interface{}, lap int32) {
