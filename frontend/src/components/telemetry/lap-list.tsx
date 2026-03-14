@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import {
     getLapTimeForLap,
     groupFramesByLap,
-    groupFramesByLapAndSector,
+    groupFramesBySector,
     metricHasData,
     type TelemetryFrame,
 } from "./lap-methods";
@@ -37,8 +37,14 @@ export const LapList = () => {
 
     const laps = useMemo(() => groupFramesByLap(history), [history]);
     const lapSectors = useMemo(
-        () => groupFramesByLapAndSector(history) as LapSectors,
-        [history],
+        () =>
+            Object.fromEntries(
+                Object.entries(laps).map(([lapNum, frames]) => [
+                    Number(lapNum),
+                    groupFramesBySector(frames),
+                ]),
+            ) as LapSectors,
+        [laps],
     );
     const metricWindow = useMemo(() => history.slice(-1800), [history]);
 

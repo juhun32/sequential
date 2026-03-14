@@ -1,12 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTelemetryStore } from "../../store/store";
-import {
-    formatTime,
-    getSectorTimesForFrames,
-    groupFramesByLap,
-    metricHasData,
-    type TelemetryFrame,
-} from "./lap-methods";
+import { formatTime, metricHasData, type TelemetryFrame } from "./lap-methods";
 import {
     DEFAULT_LIVE_SELECTED_METRICS,
     LIVE_METRICS,
@@ -38,11 +32,22 @@ export const Telemetry = ({ currentLapTimeMs }: TelemetryProps) => {
     const currentSector = normalizeSector(Number(latestFrame?.sector ?? 1));
     const currentSectorTimeMs = Number(latestFrame?.sectorTime ?? 0);
 
-    const laps = useMemo(() => groupFramesByLap(history), [history]);
     const currentLapSectorTimes = useMemo(() => {
-        const lapFrames = laps[currentLap] ?? [];
-        return getSectorTimesForFrames(lapFrames);
-    }, [laps, currentLap]);
+        const sectorTimes = { 1: 0, 2: 0, 3: 0 } as Record<1 | 2 | 3, number>;
+        const currentLapNum = Number(currentLap);
+
+        for (const frame of history) {
+            if (Number(frame.lap) !== currentLapNum) continue;
+
+            const sector = normalizeSector(Number(frame.sector ?? 1));
+            const value = Number(frame.sectorTime ?? 0);
+            if (Number.isFinite(value) && value > sectorTimes[sector]) {
+                sectorTimes[sector] = value;
+            }
+        }
+
+        return sectorTimes;
+    }, [history, currentLap]);
 
     const selectableMetrics = useMemo(
         () =>
